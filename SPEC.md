@@ -21,7 +21,7 @@ that; §2, §3 and §4 — the parts that make the guarantee work — are unchan
 | 9 | Guesses 2..N-1 | **Entropy score over the surviving candidate set**, restricted to feedback-consistent words. |
 | 10 | Feedback source | **Derived, not typed.** The player enters only the word; the tool computes the colours from the answer it already holds. |
 | 11 | Discord | **Removed.** No token, no gateway, no bot. Reverted 2026-10-13; the implementation exists in history. |
-| 12 | Spoilers | Not applicable — local terminal output. |
+| 12 | Spoilers | **None.** The answer is printed in the header. Personal aid, not a spoiler guard. |
 
 ## 2. Why the guarantee is unconditional
 
@@ -44,14 +44,17 @@ One JSON file, `cache.json` (`{"YYYY-MM-DD": "answer"}`), is the whole store:
    `{"id":2024,"solution":"quail","print_date":"2025-06-15","days_since_launch":1457,"editor":"Tracy Bennett"}`
    with HTTP 200 **with and without** a `User-Agent` header. A browser `User-Agent` is still sent —
    one line of insurance against future bot protection, not a current requirement. One request per day.
-3. `/wordle setanswer <word>` overwrites the entry for the date. Because the store is read first,
-   an override beats the endpoint forever, which is the whole point of the override.
+3. No persistent override. When the endpoint is unreachable, the answer is passed on the command
+   line (`python -m wordle.play 4 yodel`) and used for that run only.
 
 Anything reaching the store is validated as exactly five a–z letters, whether it came from the
 endpoint or from a user. A corrupt or missing store is not an error — it falls through to the
 endpoint.
 
-Date is resolved in `America/New_York` — NYT rolls the puzzle at midnight ET, not UTC.
+The date is the machine's **local** date. NYT resets at local midnight for each player, and the
+endpoint answers for any date requested: `2026-10-14.json` returned `psych` with
+`days_since_launch: 1943` while New York was still on the 13th. Pinning the date to Eastern gave
+every player east of UTC−4 yesterday's puzzle for a full day.
 
 ### 3.2 Hints
 Derived locally, never scraped. `C` = most frequent consonant present in the answer,
@@ -132,34 +135,61 @@ themselves are not cached.
 
 ## 5. Output
 
-One embed per command:
+A terminal session:
 
 ```
+$ python -m wordle.play 4
 Wordle · 2026-02-12 · solve in 4
+answer  RANGE
 consonant N · vowel E
 
-1. RINSE  🟩⬛🟩⬛🟩
-2. ABACK  🟨⬛⬛⬛⬛
-3. ABASE  🟨⬛⬛⬛🟩
-4. ||RANGE||  🟩🟩🟩🟩🟩
+1. suggestion  RINSE
+   you played > RINSE
+              🟩⬛🟩⬛🟩
+2. suggestion  ABACK
+   you played > CRANE
+              🟨⬛⬛⬛⬛
+3. suggestion  ABASE
+   you played > ABASE
+              🟨⬛⬛⬛🟩
+4. suggestion  RANGE   <- attempt 4 is the answer
+   you played > RANGE
+              🟩🟩🟩🟩🟩
+
+solved in 4
 ```
 
-The answer line is spoiler-wrapped. `/wordle answer` is sent ephemeral, so only the caller sees it.
+Rules:
 
-## 6. Commands
+- **The answer is printed at the top**, before the hints. This is a personal aid, not a spoiler
+  guard; the same word is printed by `python -m wordle.nytimes`.
+- **Enter on an empty line accepts the suggestion.** Typing a word overrides it.
+- The player's word is validated as five a–z letters; anything else is rejected with a one-line
+  reason and the prompt repeats, without consuming an attempt. A word already eliminated by the
+  colours so far is accepted — it is the player's move — with a note saying so.
+- **The candidate set follows what was actually played**, not what was suggested. A divergent
+  guess re-derives the next suggestion.
+- The colours are computed by the tool from the answer, so they cannot be mistyped.
+- Attempt N's suggestion is the answer. If the player overrides it and misses, the loop keeps
+  suggesting until solved, EOF, or Ctrl-C: N schedules the forced answer, it is not a hard stop.
+- When only the answer fits the colours before attempt N, the suggestion is a deliberate stall and
+  the output says so.
 
-| Command | Behaviour |
-|---|---|
-| `/wordle solve attempt:3\|4` | Embed with the sequence. `attempt` is an `app_commands.Range[int, 3, 4]`, so Discord rejects anything else before the code runs. |
-| `/wordle answer` | The answer, spoiler-wrapped, ephemeral. |
-| `/wordle setanswer word:<5 letters>` | Override today's answer. Requires Administrator in the channel, so it is unavailable in DMs. |
+## 6. Usage
 
-No prefix commands, no Message Content intent, `intents=discord.Intents.none()`. discord.py 2.7 gives
-only `commands.Bot` a command tree, so `WordleClient` builds its own `app_commands.CommandTree`;
-constructing one is enough to route interactions. Commands are registered globally in `setup_hook`
-via `tree.sync()`.
+```
+python -m wordle.play [attempts] [answer]
+python -m wordle.nytimes
+```
 
-An endpoint failure replies ephemerally with the error and the `/wordle setanswer` escape hatch.
+`attempts` is 3 or 4, default 4; anything else prints the usage line and exits 2. `answer` overrides
+the puzzle answer for this run only, which is also the escape hatch when the NYT endpoint is
+unreachable — the same failure path prints that hint and exits 1.
+
+`python -m wordle.nytimes` prints the date, the answer, and whether it came from the cache or the
+endpoint.
+
+No token, no `.env`, no installed packages. One network request per day at most.
 
 ## 7. Layout
 
