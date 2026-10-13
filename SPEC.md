@@ -114,6 +114,10 @@ later guess may legitimately sit outside the hint filter.
 
 Sequences are cached per `(date, N)` next to the answer, so repeat calls are instant.
 
+The guess-1 ranking depends only on the hint pair, not on the answer, so it is memoised per
+`(consonant, vowel)` — ~126 rankings instead of one per answer. Without it the full replay costs
+~15 minutes; with it, ~100 seconds.
+
 ## 5. Output
 
 One embed per command:
@@ -170,8 +174,9 @@ never has a guess eliminated by that feedback and never loses the answer from th
 The exception rule is asserted too: an inconsistent guess is permitted only when the live set has
 collapsed to the answer alone.
 
-The default run samples every 100th answer (~24 answers, ~8 s for the whole suite). The full
-sweep over all 2,315 answers costs minutes, so it is opt-in: `WORDLE_REPLAY_ALL=1`. It also
+The default run samples every 100th answer (~24 answers, whole suite in ~3 s). The full
+sweep over all 2,315 answers for both attempt counts costs ~100 s, so it is opt-in:
+`WORDLE_REPLAY_ALL=1`. It also
 replays `yodel` and `aspic`, deliberately absent from `data/answers.txt`, to prove the
 `ANSWERS | {answer}` union in §3.3 holds. This test *is* the guarantee, made executable.
 
