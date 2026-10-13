@@ -130,42 +130,56 @@ One embed per command:
 
 ```
 Wordle · 2026-02-12 · solve in 4
-Hints: consonant R · vowel A
+consonant N · vowel E
 
-1. TRACE   🟩⬛🟨⬛⬛
-2. RAISE   🟩🟨⬛⬛🟩
-3. ARISE   🟨🟩⬛🟨⬛
+1. RINSE  🟩⬛🟩⬛🟩
+2. ABACK  🟨⬛⬛⬛⬛
+3. ABASE  🟨⬛⬛⬛🟩
 4. ||RANGE||  🟩🟩🟩🟩🟩
 ```
+
+The answer line is spoiler-wrapped. `/wordle answer` is sent ephemeral, so only the caller sees it.
 
 ## 6. Commands
 
 | Command | Behaviour |
 |---|---|
-| `/wordle solve n:3\|4` | Print the sequence. |
-| `/wordle answer` | Print only the answer, spoiler-wrapped. |
-| `/wordle setanswer word:<5 letters>` | Override today's answer. Restricted to the bot owner. |
+| `/wordle solve attempt:3\|4` | Embed with the sequence. `attempt` is an `app_commands.Range[int, 3, 4]`, so Discord rejects anything else before the code runs. |
+| `/wordle answer` | The answer, spoiler-wrapped, ephemeral. |
+| `/wordle setanswer word:<5 letters>` | Override today's answer. Requires Administrator in the channel, so it is unavailable in DMs. |
 
-No prefix commands, no Message Content intent.
+No prefix commands, no Message Content intent, `intents=discord.Intents.none()`. discord.py 2.7 gives
+only `commands.Bot` a command tree, so `WordleClient` builds its own `app_commands.CommandTree`;
+constructing one is enough to route interactions. Commands are registered globally in `setup_hook`
+via `tree.sync()`.
+
+An endpoint failure replies ephemerally with the error and the `/wordle setanswer` escape hatch.
 
 ## 7. Layout
 
 ```
 wordle/
     __init__.py
-    nytimes.py      # answer fetch + cache + override
-    solver.py       # colorize, score, sequence
+    nytimes.py      # answer fetch + store + override
+    solver.py       # colorize, score, sequence, render
     bot.py          # discord.py slash commands
 data/answers.txt
 tests/
     test_words.py   # answer-list integrity
-    test_solver.py  # full-answer-list replay, added with the solver
-requirements.txt    # discord.py>=2.3   (stdlib urllib for the HTTP call, stdlib unittest for tests)
+    test_solver.py  # replay, sampled by default
+    test_nytimes.py # store, override, endpoint fixture, ET rollover
+    test_bot.py     # output text + command registration
+requirements.txt    # discord.py>=2.3, tzdata on Windows only
 .gitattributes      # * text=auto eol=lf
 .env.example        # DISCORD_TOKEN
 ```
 
 `DISCORD_TOKEN` from environment. No dotenv dependency — `bot.py` reads `os.environ` directly.
+Run with `python -m wordle.bot`.
+
+`zoneinfo` has no tz database on Windows, so `tzdata` is required there and marked
+`platform_system == "Windows"`; Linux and macOS already ship one. Without it the bot dies at
+import with `ZoneInfoNotFoundError: America/New_York`.
 
 ## 8. Test
 
@@ -196,7 +210,7 @@ phase until the current phase's gate passes.
 | **P0 — scaffold** | `feature/repo-scaffold` | Package layout, `requirements.txt`, `data/answers.txt`, `.gitignore`, `.gitattributes`, `.env.example`, `tests/test_words.py`. | `python -m unittest discover -s tests` passes offline; no solver code yet. |
 | **P1 — solver core** | `feature/solver-core` | `solver.py`: `colorize`, `score`, `hints`, `sequence`, `render`. `tests/test_solver.py` replay + `colorize` cases. | Sampled replay passes for N=3 and N=4; `WORDLE_REPLAY_ALL=1` sweep passes. Runs offline. |
 | **P2 — data layer** | `feature/nytimes-answer` | `nytimes.py`: answer fetch with browser UA, `cache.json` store, `America/New_York` date, validation, manual override. | Offline tests against a fixture response: one fetch then store hit, override beats the endpoint, bad input rejected, corrupt store falls through. No network in the test run. |
-| **P3 — Discord** | `feature/discord-commands` | `bot.py`: `/wordle solve`, `/wordle answer`, `/wordle setanswer`, embed renderer. | Bot runs locally against a real server; all three commands render; `setanswer` rejected for non-owners. |
+| **P3 — Discord** | `feature/discord-commands` | `bot.py`: `/wordle solve`, `/wordle answer`, `/wordle setanswer`, embed renderer. | Automated: output text and command registration. Manual, needs a real token: `python -m wordle.bot`, then all three commands in a server, and `setanswer` refused for a non-admin. |
 | **P4 — hardening** | `feature/error-handling` | Endpoint failure surfaced in the embed with the store/override path explained, `README.md` setup + run instructions. | Simulated endpoint failure still produces a sequence via the store, and explains itself when the store is empty too. |
 
 Deliberate ordering: the solver is built and proven before any network or Discord code exists, so
