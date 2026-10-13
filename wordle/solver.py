@@ -111,11 +111,16 @@ def sequence(answer: str, n: int) -> list[tuple[str, tuple[int, ...]]]:
     return [(word, colorize(word, answer)) for word in guesses]
 
 
-def render(seq: list[tuple[str, tuple[int, ...]]]) -> str:
-    return "\n".join(
-        f"{i}. {word.upper()}  {''.join(_FEEDBACK[c] for c in colors)}"
-        for i, (word, colors) in enumerate(seq, 1)
-    )
+def render(seq: list[tuple[str, tuple[int, ...]]], spoiler_last: bool = False) -> str:
+    """Numbered guesses with coloured squares. `spoiler_last` hides the final guess behind a
+    Discord spoiler, which is what the answer line needs in a shared channel."""
+    lines = []
+    for i, (word, colors) in enumerate(seq, 1):
+        label = word.upper()
+        if spoiler_last and i == len(seq):
+            label = f"||{label}||"
+        lines.append(f"{i}. {label}  {''.join(_FEEDBACK[c] for c in colors)}")
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
