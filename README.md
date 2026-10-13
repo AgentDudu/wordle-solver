@@ -8,6 +8,7 @@ guess.
 ```
 $ python -m wordle.play
 Wordle · 2026-10-13 · solve in 4
+answer  WIDER
 consonant r · vowel e
 
 1. suggestion  TERSE
