@@ -76,33 +76,47 @@ score(word, pool) = entropy of the partition of `pool` by colorize(word, candida
                     for candidate in pool          # Shannon, base 2
 
 sequence(answer, N):
-    POOL   = ANSWERS | {answer}          # answer must be in the pool, see 3.3
+    universe = ANSWERS | {answer}        # answer must be in the pool, see 3.3
     C, V   = hints(answer)
-    pool   = [w in POOL if C in w and V in w]
-    if not pool: pool = POOL             # shortcut: hint constraint dropped if unsatisfiable
+    pool   = [w in universe if C in w and V in w]
+    if not pool: pool = universe         # shortcut: hint constraint dropped if unsatisfiable
 
-    g1     = argmax score(w, pool) for w in pool
-    cands  = [w in pool if colorize(g1, w) == colorize(g1, answer)]
+    g1     = argmax score(w, pool) for w in pool \ {answer}
+    cands  = [w in universe if colorize(g1, w) == colorize(g1, answer)]
 
     for k in 2 .. N-1:
-        gk     = argmax score(w, cands) for w in cands, tie-break by list order
+        legal = [w in cands if w not in guessed and w != answer]
+        if not legal: legal = [w in universe if w not in guessed and w != answer]   # filler, see below
+        gk     = argmax score(w, cands) for w in legal, tie-break by list order
         cands  = [w in cands if colorize(gk, w) == colorize(gk, answer)]
 
     gN     = answer
     return [g1, ..., gN] with feedback colorize(gi, answer) for each i
 ```
 
-Two properties the tests assert:
+Three properties the tests assert:
 
-- **Consistency.** Every guess `gi` satisfies `colorize(gi, answer) == colorize(gi, g_{i-1} feedback)`,
-  i.e. copying the guess into NYT produces exactly the colours the bot printed.
-- **Convergence.** `gN == answer`, and `len(sequence) == N`.
+- **Consistency.** Every guess `gi` is a word that is still a *possible answer* given the feedback
+  already seen, i.e. `colorize(gj, gi) == colorize(gj, answer)` for every earlier guess `gj`.
+  Equivalently: a player who only ever sees feedback never has a guess eliminated by that same
+  feedback. Copying the guess into NYT produces exactly the colours the bot printed.
+- **No early reveal.** `gi != answer` for `i < N`. If the answer is the only consistent word left
+  before attempt N, a filler from the universe is guessed instead — the documented exception, and
+  the only case in which a guess is not consistent.
+- **Convergence.** `gN == answer`, `len(sequence) == N`, and the answer is never eliminated from
+  the candidate set.
 
 Scoring pool is the surviving candidate set itself, not the whole word list. This is both
 faster (≈150×150 comparisons instead of 2,315×2,315, so a sequence computes in well under a
 second in pure Python) and more humanlike — humans guess from words they think are still possible.
+The hint filter applies to guess 1 only; candidate tracking spans the whole universe, because a
+later guess may legitimately sit outside the hint filter.
 
 Sequences are cached per `(date, N)` next to the answer, so repeat calls are instant.
+
+The guess-1 ranking depends only on the hint pair, not on the answer, so it is memoised per
+`(consonant, vowel)` — ~126 rankings instead of one per answer. Without it the full replay costs
+~15 minutes; with it, ~100 seconds.
 
 ## 5. Output
 
@@ -153,10 +167,17 @@ Stdlib `unittest`, no test dependency. Run: `python -m unittest discover -s test
 
 `tests/test_words.py` asserts `data/answers.txt` is 2,315 unique five-letter lowercase words.
 
-`tests/test_solver.py` replays **every** word in `data/answers.txt` for N = 3 and N = 4 and
-asserts: sequence length is N, last guess is the answer, every guess is in the pool, every guess
-is feedback-consistent, guess 1 contains both hint letters whenever any pool word does. It also
-replays a word deliberately absent from `data/answers.txt` (`yodel`) to prove the
+`tests/test_solver.py` replays the answer list for N = 3 and N = 4 and asserts: sequence length
+is N, last guess is the answer, no guess repeats, every guess is in the pool, guess 1 contains
+both hint letters, and — the load-bearing one — a simulated player who only ever sees feedback
+never has a guess eliminated by that feedback and never loses the answer from the candidate set.
+The exception rule is asserted too: an inconsistent guess is permitted only when the live set has
+collapsed to the answer alone.
+
+The default run samples every 100th answer (~24 answers, whole suite in ~3 s). The full
+sweep over all 2,315 answers for both attempt counts costs ~100 s, so it is opt-in:
+`WORDLE_REPLAY_ALL=1`. It also
+replays `yodel` and `aspic`, deliberately absent from `data/answers.txt`, to prove the
 `ANSWERS | {answer}` union in §3.3 holds. This test *is* the guarantee, made executable.
 
 ## 9. Implementation phases
@@ -167,7 +188,7 @@ phase until the current phase's gate passes.
 | Phase | Branch | Deliverable | Gate |
 |---|---|---|---|
 | **P0 — scaffold** | `feature/repo-scaffold` | Package layout, `requirements.txt`, `data/answers.txt`, `.gitignore`, `.gitattributes`, `.env.example`, `tests/test_words.py`. | `python -m unittest discover -s tests` passes offline; no solver code yet. |
-| **P1 — solver core** | `feature/solver-core` | `solver.py`: `colorize`, `score`, `hints`, `sequence`. `tests/test_solver.py` full-answer-list replay. | Replay passes for N=3 and N=4 over every answer word. `colorize` unit tests cover duplicate letters. Runs offline. |
+| **P1 — solver core** | `feature/solver-core` | `solver.py`: `colorize`, `score`, `hints`, `sequence`, `render`. `tests/test_solver.py` replay + `colorize` cases. | Sampled replay passes for N=3 and N=4; `WORDLE_REPLAY_ALL=1` sweep passes. Runs offline. |
 | **P2 — data layer** | `feature/nytimes-answer` | `nytimes.py`: answer fetch with browser UA, `cache.json`, `America/New_York` date, local hint derivation, sequence cache, manual override store. | Offline test against a fixture response; expired/missing-cache path returns the override; no network in CI. |
 | **P3 — Discord** | `feature/discord-commands` | `bot.py`: `/wordle solve`, `/wordle answer`, `/wordle setanswer`, embed renderer. | Bot runs locally against a real server; all three commands render; `setanswer` rejected for non-owners. |
 | **P4 — hardening** | `feature/error-handling` | NYT failure → cache → override chain surfaced in the embed, 5-letter input validation, `README.md` setup + run instructions. | Simulated endpoint failure still produces a sequence via override. |
