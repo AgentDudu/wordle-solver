@@ -32,8 +32,11 @@ the design.
 
 ### 3.1 Answer
 1. In-memory / on-disk cache for the date (`cache.json`).
-2. `GET https://www.nytimes.com/svc/wordle/v2/YYYY-MM-DD.json` → `.answer`.
-   Sends a browser `User-Agent`; NYT returns 403 without one. One request per day.
+2. `GET https://www.nytimes.com/svc/wordle/v2/YYYY-MM-DD.json` → `.solution`.
+   Verified 2026-10-13: returns `{"id":2024,"solution":"quail","print_date":"2025-06-15",
+   "days_since_launch":1457,"editor":"Tracy Bennett"}` with HTTP 200 **with and without** a
+   `User-Agent` header. A browser `User-Agent` is still sent — one line of insurance against
+   future bot protection, not a current requirement. One request per day.
 3. Manual override command `/wordle setanswer <word>` (owner-only, see §6).
 
 Date is resolved in `America/New_York` — NYT rolls the puzzle at midnight ET, not UTC.
@@ -47,8 +50,21 @@ Both are true statements about the word. Accepted trade-off — it removes the b
 bot-protected HTML scrape described in BRIEFING §2.
 
 ### 3.3 Word lists
-`data/answers.txt` — the official NYT answer list, one word per line, lowercase.
-`shortcut: static snapshot, breaks when NYT adds new answers; refresh by re-downloading the list.`
+`data/answers.txt` — 2,315 words, one per line, lowercase, sorted. Snapshot of the classic
+official NYT answer list
+(`wordle-answers-alphabetical.txt`, retrieved 2026-10-13 from
+`raw.githubusercontent.com/taw/100-languages-speedrun/master/episode-88-brat/`).
+
+**Measured staleness.** Sampling 16 recent dates from the NYT endpoint, 1–2 answers fall outside
+this list — `yodel` (2026-10-12) and `aspic` (2026-08-16) are absent. Roughly 6% of current
+answers are new words NYT added after the snapshot was cut.
+
+That is not cosmetic: if the true answer is outside the guess pool, the feedback-consistent
+candidate set in §4 can empty out and the sequence stalls before attempt N. So the pool is
+always `ANSWERS | {answer}` — the fetched answer is unioned in. One line, and it makes the
+§4 guarantee hold for words the snapshot has never seen.
+`shortcut: snapshot is never refreshed; the union covers today's answer only. Upgrade to a
+maintained list if the pool's word quality ever matters more than the guarantee.`
 
 ## 4. Algorithm
 
@@ -60,9 +76,10 @@ score(word, pool) = entropy of the partition of `pool` by colorize(word, candida
                     for candidate in pool          # Shannon, base 2
 
 sequence(answer, N):
+    POOL   = ANSWERS | {answer}          # answer must be in the pool, see 3.3
     C, V   = hints(answer)
-    pool   = [w in ANSWERS if C in w and V in w]
-    if not pool: pool = ANSWERS          # shortcut: hint constraint dropped if unsatisfiable
+    pool   = [w in POOL if C in w and V in w]
+    if not pool: pool = POOL             # shortcut: hint constraint dropped if unsatisfiable
 
     g1     = argmax score(w, pool) for w in pool
     cands  = [w in pool if colorize(g1, w) == colorize(g1, answer)]
@@ -120,18 +137,27 @@ wordle/
     solver.py       # colorize, score, sequence
     bot.py          # discord.py slash commands
 data/answers.txt
-tests/test_solver.py
-requirements.txt    # discord.py>=2.3   (stdlib urllib for the HTTP call)
+tests/
+    test_words.py   # answer-list integrity
+    test_solver.py  # full-answer-list replay, added with the solver
+requirements.txt    # discord.py>=2.3   (stdlib urllib for the HTTP call, stdlib unittest for tests)
+.gitattributes      # * text=auto eol=lf
+.env.example        # DISCORD_TOKEN
 ```
 
-`DISCORD_TOKEN` from environment.
+`DISCORD_TOKEN` from environment. No dotenv dependency — `bot.py` reads `os.environ` directly.
 
 ## 8. Test
 
+Stdlib `unittest`, no test dependency. Run: `python -m unittest discover -s tests`.
+
+`tests/test_words.py` asserts `data/answers.txt` is 2,315 unique five-letter lowercase words.
+
 `tests/test_solver.py` replays **every** word in `data/answers.txt` for N = 3 and N = 4 and
-asserts: sequence length is N, last guess is the answer, every guess is in the answer list,
-every guess is feedback-consistent, guess 1 contains both hint letters whenever any answer-list
-word does. This test *is* the guarantee, made executable.
+asserts: sequence length is N, last guess is the answer, every guess is in the pool, every guess
+is feedback-consistent, guess 1 contains both hint letters whenever any pool word does. It also
+replays a word deliberately absent from `data/answers.txt` (`yodel`) to prove the
+`ANSWERS | {answer}` union in §3.3 holds. This test *is* the guarantee, made executable.
 
 ## 9. Implementation phases
 
@@ -140,7 +166,7 @@ phase until the current phase's gate passes.
 
 | Phase | Branch | Deliverable | Gate |
 |---|---|---|---|
-| **P0 — scaffold** | `feature/repo-scaffold` | Package layout, `requirements.txt`, `data/answers.txt`, `.gitignore`, `DISCORD_TOKEN` env contract. | `pip install -r requirements.txt` and `pytest` collect cleanly; no solver code yet. |
+| **P0 — scaffold** | `feature/repo-scaffold` | Package layout, `requirements.txt`, `data/answers.txt`, `.gitignore`, `.gitattributes`, `.env.example`, `tests/test_words.py`. | `python -m unittest discover -s tests` passes offline; no solver code yet. |
 | **P1 — solver core** | `feature/solver-core` | `solver.py`: `colorize`, `score`, `hints`, `sequence`. `tests/test_solver.py` full-answer-list replay. | Replay passes for N=3 and N=4 over every answer word. `colorize` unit tests cover duplicate letters. Runs offline. |
 | **P2 — data layer** | `feature/nytimes-answer` | `nytimes.py`: answer fetch with browser UA, `cache.json`, `America/New_York` date, local hint derivation, sequence cache, manual override store. | Offline test against a fixture response; expired/missing-cache path returns the override; no network in CI. |
 | **P3 — Discord** | `feature/discord-commands` | `bot.py`: `/wordle solve`, `/wordle answer`, `/wordle setanswer`, embed renderer. | Bot runs locally against a real server; all three commands render; `setanswer` rejected for non-owners. |
