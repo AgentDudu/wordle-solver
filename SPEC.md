@@ -1,6 +1,10 @@
-# Discord Wordle Solver — Final Specification
+# Wordle Solver — Final Specification
 
 Supersedes `BRIEFING.md`. Every open question in §5 of that brief is resolved below.
+
+Revision 2 (2026-10-13): the Discord transport is dropped. The tool is a local command-line loop
+where the player reports each guess they actually played. Sections 1, 5, 6, 7, 9 and 11 reflect
+that; §2, §3 and §4 — the parts that make the guarantee work — are unchanged.
 
 ## 1. Decisions
 
@@ -10,13 +14,14 @@ Supersedes `BRIEFING.md`. Every open question in §5 of that brief is resolved b
 | 2 | Guarantee | **Unconditional.** Answer is guessed on attempt N. No fallback path exists. |
 | 3 | "Enough yellow/green" threshold | **Removed.** Meaningless once the answer is known. |
 | 4 | "Solve by attempt N" | **Option A.** Attempt N *is* the answer. N ∈ {3, 4}. |
-| 5 | Interaction | **Script mode, stateless.** Full sequence printed at once. No feedback input, no per-user state. |
+| 5 | Interaction | **Interactive CLI loop.** The tool prints a suggestion, the player types the word they actually played, the tool prints the real colours and the next suggestion. |
 | 6 | NYT data | **Answer API only.** Hints derived locally from the answer. Wordle Review page is never scraped. |
 | 7 | Guess pool | **Official answer list only** (~2,315 words). Never the 14,855-word allowed-guess list. |
 | 8 | Guess 1 | **Highest-scoring answer-list word containing both hinted letters.** Not random. |
 | 9 | Guesses 2..N-1 | **Entropy score over the surviving candidate set**, restricted to feedback-consistent words. |
-| 10 | Discord | **Slash commands**, Python 3.12 + discord.py 2.x, runs locally. |
-| 11 | Spoilers | Answer line wrapped in `\|\|spoiler\|\|`. |
+| 10 | Feedback source | **Derived, not typed.** The player enters only the word; the tool computes the colours from the answer it already holds. |
+| 11 | Discord | **Removed.** No token, no gateway, no bot. Reverted 2026-10-13; the implementation exists in history. |
+| 12 | Spoilers | Not applicable — local terminal output. |
 
 ## 2. Why the guarantee is unconditional
 
@@ -62,9 +67,10 @@ official NYT answer list
 (`wordle-answers-alphabetical.txt`, retrieved 2026-10-13 from
 `raw.githubusercontent.com/taw/100-languages-speedrun/master/episode-88-brat/`).
 
-**Measured staleness.** Sampling 16 recent dates from the NYT endpoint, 1–2 answers fall outside
-this list — `yodel` (2026-10-12) and `aspic` (2026-08-16) are absent. Roughly 6% of current
-answers are new words NYT added after the snapshot was cut.
+**Measured staleness.** Sampling 42 dates across 2024–2026 from the NYT endpoint, 5 answers fall
+outside this list — `spate` (2025-04-21), `tizzy` (2025-07-21), `shill` (2026-07-21),
+`soupy` (2026-09-05), `pager` (2026-09-21). About 12% of current answers are words NYT added after
+the snapshot was cut.
 
 That is not cosmetic: if the true answer is outside the guess pool, the feedback-consistent
 candidate set in §4 can empty out and the sequence stalls before attempt N. So the pool is
@@ -160,26 +166,26 @@ An endpoint failure replies ephemerally with the error and the `/wordle setanswe
 ```
 wordle/
     __init__.py
-    nytimes.py      # answer fetch + store + override
-    solver.py       # colorize, score, sequence, render
-    bot.py          # discord.py slash commands
+    nytimes.py      # answer fetch + cache store
+    solver.py       # colorize, score, hints, Game, sequence, render
+    play.py         # CLI loop
 data/answers.txt
 tests/
     test_words.py   # answer-list integrity
     test_solver.py  # replay, sampled by default
-    test_nytimes.py # store, override, endpoint fixture, ET rollover
-    test_bot.py     # output text + command registration
-requirements.txt    # discord.py>=2.3, tzdata on Windows only
+    test_nytimes.py # store, endpoint fixture, ET rollover
+    test_play.py    # scripted-stdin sessions
+requirements.txt    # no third-party dependencies
 .gitattributes      # * text=auto eol=lf
-.env.example        # DISCORD_TOKEN
 ```
 
-`DISCORD_TOKEN` from environment. No dotenv dependency — `bot.py` reads `os.environ` directly.
-Run with `python -m wordle.bot`.
+No `.env`, no token, no installed packages. Run with `python -m wordle.play`.
 
-`zoneinfo` has no tz database on Windows, so `tzdata` is required there and marked
-`platform_system == "Windows"`; Linux and macOS already ship one. Without it the bot dies at
-import with `ZoneInfoNotFoundError: America/New_York`.
+**The puzzle date is the machine's local date.** NYT resets at local midnight for each player, and
+the endpoint answers for any date requested: `2026-10-14.json` returned `psych` with
+`days_since_launch: 1943` while New York was still on the 13th. Pinning the date to Eastern was
+wrong for every player east of UTC−4 — a UTC+8 machine got yesterday's puzzle all day. The
+consequence is that `zoneinfo` and the Windows `tzdata` dependency leave the design entirely.
 
 ## 8. Test
 
@@ -200,6 +206,10 @@ sweep over all 2,315 answers for both attempt counts costs ~100 s, so it is opt-
 replays `yodel` and `aspic`, deliberately absent from `data/answers.txt`, to prove the
 `ANSWERS | {answer}` union in §3.3 holds. This test *is* the guarantee, made executable.
 
+`tests/test_play.py` drives the CLI loop with scripted stdin and asserts the bridge that matters:
+accepting every suggestion reproduces `sequence()` exactly, and overriding a suggestion re-derives
+the next one from what was actually played.
+
 ## 9. Implementation phases
 
 Each phase is independently verifiable and lands on its own branch/PR. Nothing moves to the next
@@ -215,6 +225,16 @@ phase until the current phase's gate passes.
 
 Deliberate ordering: the solver is built and proven before any network or Discord code exists, so
 the guarantee in §4 is never blocked on an external dependency.
+
+P0–P4 are merged on `develop`. Revision 2 replaces the Discord transport with the CLI loop. It
+lands as **one** branch, because the bot calls the solver API the interactive core changes: the
+removal and the CLI cannot each build on their own. Three commits, one PR:
+
+| Commit | Deliverable | Gate |
+|---|---|---|
+| `docs:` | specification revised to the CLI loop | — |
+| `chore:` | delete `bot.py`, `tests/test_bot.py`, `.env.example`, `discord.py` | suite passes with no Discord import anywhere |
+| `feat:` | `Game` in `solver.py`, `sequence()` as the accept-everything wrapper, `play.py`, `tests/test_play.py`, `README.md` | existing replay green **unchanged** (sampled and full sweep); scripted-stdin tests cover accept, override, bad input, EOF |
 
 ## 10. Git workflow
 
@@ -235,6 +255,7 @@ Gitflow. `main` holds releases, `develop` is the integration branch, work happen
 
 ## 11. Out of scope
 
-Honest (no-NYT-data) solver mode, interactive feedback entry, Wordle Review scraping,
-multi-puzzle/variant support, "make the record look humanly imperfect" jitter, hosting/deploy
-config. BRIEFING §4.8 ToS concern is noted and accepted: one request per day, personal use.
+Discord transport of any kind — bot, webhook, token (built in P3, removed in R0; it lives in git
+history). Honest (no-NYT-data) solver mode, Wordle Review scraping, multi-puzzle/variant support,
+"make the record look humanly imperfect" jitter, hosting/deploy config, any persistent per-player
+state. BRIEFING §4.8 ToS concern is noted and accepted: one request per day, personal use.

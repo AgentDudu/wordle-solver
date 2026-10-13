@@ -12,7 +12,7 @@ _FREQ = "etaoinshrdlcumwfgypbvkjxqz"
 _VOWELS = frozenset("aeiou")
 _ANSWERS_PATH = Path(__file__).resolve().parent.parent / "data" / "answers.txt"
 
-_FEEDBACK = {GREEN: "🟩", YELLOW: "🟨", GRAY: "⬛"}
+FEEDBACK = {GREEN: "🟩", YELLOW: "🟨", GRAY: "⬛"}
 
 
 @lru_cache(maxsize=None)
@@ -80,46 +80,71 @@ def _hint_pool(consonant: str | None, vowel: str | None) -> list[str]:
     return _openers[key]
 
 
+class Game:
+    """One puzzle, attempt by attempt: suggest a guess, then record the word actually played.
+
+    `sequence` is this class with every suggestion accepted, so the replay tests prove the
+    guarantee for the CLI's decision path as well.
+    """
+
+    def __init__(self, answer: str, n: int) -> None:
+        if n not in (3, 4):
+            raise ValueError("solve attempt must be 3 or 4")
+        self.answer = answer
+        self.n = n
+        self.universe = sorted(set(load_answers()) | {answer})
+        self.played: list[tuple[str, tuple[int, ...]]] = []
+        # Kept as a list in universe order: `max` takes the first best, so the tie-break is
+        # deterministic and matches the batch path.
+        self.survivors = list(self.universe)
+
+    def suggestion(self) -> str:
+        """The guess to play on the next attempt."""
+        if len(self.played) + 1 >= self.n:
+            return self.answer
+        if not self.played:
+            consonant, vowel = hints(self.answer)
+            return next(w for w in _hint_pool(consonant, vowel) if w != self.answer)
+        played = {word for word, _ in self.played}
+        # A word stays eligible only while it is still a possible answer given the feedback seen
+        # so far: colorize(guess, word) must equal the feedback that guess actually drew. If the
+        # answer is the only consistent word left, fall back to a filler rather than spoiling
+        # the attempt early.
+        choices = [w for w in self.survivors if w not in played and w != self.answer]
+        if not choices:
+            choices = [w for w in self.universe if w not in played and w != self.answer]
+        return max(choices, key=lambda w: score(w, self.survivors))
+
+    def play(self, word: str) -> tuple[int, ...]:
+        """Record the word actually played; return the colours NYT will show for it."""
+        colors = colorize(word, self.answer)
+        self.played.append((word, colors))
+        self.survivors = [w for w in self.survivors if colorize(word, w) == colors]
+        return colors
+
+    @property
+    def solved(self) -> bool:
+        return bool(self.played) and self.played[-1][1] == (GREEN, GREEN, GREEN, GREEN, GREEN)
+
+
 def sequence(answer: str, n: int) -> list[tuple[str, tuple[int, ...]]]:
     """`n` guesses ending with `answer`. Every guess before the last is consistent with
     the answer's real feedback, so the colours printed here are the colours NYT will show."""
-    if n not in (3, 4):
-        raise ValueError("solve attempt must be 3 or 4")
-
-    universe = sorted(set(load_answers()) | {answer})
-    consonant, vowel = hints(answer)
-    pool = _hint_pool(consonant, vowel)  # shortcut: hint constraint dropped when unsatisfiable
-    opener = next(w for w in pool if w != answer)
-    guesses = [opener]
-    # A word stays eligible only while it is still a possible answer given the feedback seen so
-    # far: colorize(guess, word) must equal the feedback that guess actually drew. The tracking
-    # spans the whole universe, not just the hint-filtered pool, because a later guess may
-    # legitimately sit outside the hint filter.
-    survivors = [w for w in universe if colorize(opener, w) == colorize(opener, answer)]
-
-    for _ in range(2, n):
-        # The answer itself is never guessed early; if it is the only consistent word left,
-        # fall back to a filler from the universe rather than spoiling the attempt.
-        choices = [w for w in survivors if w not in guesses and w != answer]
-        if not choices:
-            choices = [w for w in universe if w not in guesses and w != answer]
-        guess = max(choices, key=lambda w: score(w, survivors))
-        guesses.append(guess)
-        survivors = [w for w in survivors if colorize(guess, w) == colorize(guess, answer)]
-
-    guesses.append(answer)
-    return [(word, colorize(word, answer)) for word in guesses]
+    game = Game(answer, n)
+    out = []
+    while True:
+        guess = game.suggestion()
+        out.append((guess, colorize(guess, answer)))
+        if guess == answer:
+            return out
+        game.play(guess)
 
 
-def render(seq: list[tuple[str, tuple[int, ...]]], spoiler_last: bool = False) -> str:
-    """Numbered guesses with coloured squares. `spoiler_last` hides the final guess behind a
-    Discord spoiler, which is what the answer line needs in a shared channel."""
+def render(seq: list[tuple[str, tuple[int, ...]]]) -> str:
+    """Numbered guesses with coloured squares."""
     lines = []
     for i, (word, colors) in enumerate(seq, 1):
-        label = word.upper()
-        if spoiler_last and i == len(seq):
-            label = f"||{label}||"
-        lines.append(f"{i}. {label}  {''.join(_FEEDBACK[c] for c in colors)}")
+        lines.append(f"{i}. {word.upper()}  {''.join(FEEDBACK[c] for c in colors)}")
     return "\n".join(lines)
 
 

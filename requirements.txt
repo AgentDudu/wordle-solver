@@ -1,2 +1,1 @@
-discord.py>=2.3
-tzdata>=2024.1; platform_system == "Windows"
+# No third-party dependencies: the fetch is urllib and the puzzle date is local.

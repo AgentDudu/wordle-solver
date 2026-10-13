@@ -1,26 +1,27 @@
-"""Today's Wordle answer: NYT endpoint, on-disk store, manual override.
+"""Today's Wordle answer: NYT endpoint plus an on-disk cache, one entry per day.
 
-One file, `cache.json`, is the store. The endpoint fills it, `set_answer` overwrites an entry in
-it, and reads consult it first — so a manual override survives every later fetch.
+`cache.json` holds the fetched answers. Reads consult it first, so a day is fetched at most once.
 """
 
 import json
 import re
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 _URL = "https://www.nytimes.com/svc/wordle/v2/{iso}.json"
 _USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 _STORE_PATH = Path(__file__).resolve().parent.parent / "cache.json"
-_EASTERN = ZoneInfo("America/New_York")
 
 
 def today(now: datetime | None = None) -> date:
-    """Puzzle date. NYT rolls at midnight Eastern, not UTC."""
-    now = now or datetime.now(timezone.utc)
-    return now.astimezone(_EASTERN).date()
+    """Puzzle date: the player's own local date.
+
+    NYT resets at local midnight for each player, and the endpoint answers for any date you ask
+    it for — `2026-10-14.json` served `psych` with `days_since_launch: 1943` while New York was
+    still on the 13th. Pinning this to Eastern handed UTC+8 players yesterday's puzzle.
+    """
+    return (now or datetime.now()).astimezone().date()
 
 
 def get_answer(day: date, store_path: Path = _STORE_PATH) -> str:
@@ -30,14 +31,6 @@ def get_answer(day: date, store_path: Path = _STORE_PATH) -> str:
     answer = _validate(_fetch(day), source="NYT endpoint")
     store = _read(store_path)
     store[day.isoformat()] = answer
-    _write(store_path, store)
-    return answer
-
-
-def set_answer(answer: str, day: date | None = None, store_path: Path = _STORE_PATH) -> str:
-    answer = _validate(answer, source="override")
-    store = _read(store_path)
-    store[(day or today()).isoformat()] = answer
     _write(store_path, store)
     return answer
 
@@ -64,3 +57,12 @@ def _read(store_path: Path) -> dict[str, str]:
 
 def _write(store_path: Path, store: dict[str, str]) -> None:
     store_path.write_text(json.dumps(store, indent=1, sort_keys=True), encoding="utf-8")
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.stdout.reconfigure(encoding="utf-8")
+    day = today()
+    cached = _read(_STORE_PATH).get(day.isoformat())
+    print(f"{day.isoformat()}  {cached or get_answer(day)}  ({'cache' if cached else 'NYT endpoint'})")
