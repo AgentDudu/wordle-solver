@@ -169,13 +169,13 @@ wordle/
     nytimes.py      # answer fetch + cache store
     solver.py       # colorize, score, hints, Game, sequence, render
     play.py         # CLI loop
-    nyt.py          # NYT hints + answer endpoint (reference only)
 data/answers.txt
 tests/
     test_words.py   # answer-list integrity
     test_solver.py  # replay, sampled by default
     test_nytimes.py # store, endpoint fixture, ET rollover
-requirements.txt    # requests only
+    test_play.py    # scripted-stdin sessions
+requirements.txt    # tzdata, Windows only
 .gitattributes      # * text=auto eol=lf
 ```
 
@@ -225,13 +225,15 @@ phase until the current phase's gate passes.
 Deliberate ordering: the solver is built and proven before any network or Discord code exists, so
 the guarantee in §4 is never blocked on an external dependency.
 
-P0–P4 are merged on `develop`. Revision 2 replaces the Discord transport with the CLI loop:
+P0–P4 are merged on `develop`. Revision 2 replaces the Discord transport with the CLI loop. It
+lands as **one** branch, because the bot calls the solver API the interactive core changes: the
+removal and the CLI cannot each build on their own. Three commits, one PR:
 
-| Phase | Branch | Deliverable | Gate |
-|---|---|---|---|
-| **R0 — remove the bot** | `feature/remove-discord-bot` | Delete `bot.py`, `tests/test_bot.py`, `discord.py`, `tzdata`, `.env.example`. | Suite passes with no Discord import anywhere; `wordle.nytimes` still fetches and caches. |
-| **R1 — interactive core** | `feature/interactive-cli` | `Game` in `solver.py`, `sequence()` as the accept-everything wrapper, `play.py`, `tests/test_play.py`. | Existing replay still green unchanged; scripted-stdin tests cover accept, override, bad input, EOF. |
-| **R2 — docs** | `feature/docs-rewrite` | `README.md` for the CLI. | Commands in the README are the commands that exist. |
+| Commit | Deliverable | Gate |
+|---|---|---|
+| `docs:` | specification revised to the CLI loop | — |
+| `chore:` | delete `bot.py`, `tests/test_bot.py`, `.env.example`, `discord.py`, `tzdata` stays for the ET date | suite passes with no Discord import anywhere |
+| `feat:` | `Game` in `solver.py`, `sequence()` as the accept-everything wrapper, `play.py`, `tests/test_play.py`, `README.md` | existing replay green **unchanged** (sampled and full sweep); scripted-stdin tests cover accept, override, bad input, EOF |
 
 ## 10. Git workflow
 
