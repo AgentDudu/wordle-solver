@@ -2,6 +2,7 @@
 
 import math
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 GREEN, YELLOW, GRAY = 2, 1, 0
@@ -14,6 +15,7 @@ _ANSWERS_PATH = Path(__file__).resolve().parent.parent / "data" / "answers.txt"
 _FEEDBACK = {GREEN: "🟩", YELLOW: "🟨", GRAY: "⬛"}
 
 
+@lru_cache(maxsize=None)
 def load_answers(path: Path = _ANSWERS_PATH) -> list[str]:
     return sorted(path.read_text(encoding="utf-8").split())
 
@@ -56,23 +58,38 @@ def score(word: str, pool: list[str]) -> float:
     return -sum((c / n) * math.log2(c / n) for c in counts.values())
 
 
-def sequence(answer: str, n: int, answers: list[str] | None = None) -> list[tuple[str, tuple[int, ...]]]:
+_openers: dict[tuple[str | None, str | None], list[str]] = {}
+
+
+def _hint_pool(consonant: str | None, vowel: str | None) -> list[str]:
+    """Universe words carrying both hinted letters, best opener first.
+
+    This ranking depends only on the hint pair, not on the answer, so it is computed once per
+    pair (~126 pairs) instead of once per answer. It is the dominant cost otherwise.
+    """
+    key = (consonant, vowel)
+    if key not in _openers:
+        universe = load_answers()
+        hinted = [
+            w
+            for w in universe
+            if (consonant is None or consonant in w) and (vowel is None or vowel in w)
+        ]
+        pool = hinted or universe
+        _openers[key] = sorted(pool, key=lambda w: -score(w, pool))
+    return _openers[key]
+
+
+def sequence(answer: str, n: int) -> list[tuple[str, tuple[int, ...]]]:
     """`n` guesses ending with `answer`. Every guess before the last is consistent with
     the answer's real feedback, so the colours printed here are the colours NYT will show."""
     if n not in (3, 4):
         raise ValueError("solve attempt must be 3 or 4")
 
-    universe = sorted(set(load_answers() if answers is None else answers) | {answer})
+    universe = sorted(set(load_answers()) | {answer})
     consonant, vowel = hints(answer)
-    hinted = [
-        w
-        for w in universe
-        if (consonant is None or consonant in w) and (vowel is None or vowel in w)
-    ]
-    pool = hinted or universe  # shortcut: hint constraint dropped when no universe word satisfies it
-
-    candidates = [w for w in pool if w != answer]
-    opener = max(candidates, key=lambda w: score(w, pool))
+    pool = _hint_pool(consonant, vowel)  # shortcut: hint constraint dropped when unsatisfiable
+    opener = next(w for w in pool if w != answer)
     guesses = [opener]
     # A word stays eligible only while it is still a possible answer given the feedback seen so
     # far: colorize(guess, word) must equal the feedback that guess actually drew. The tracking
