@@ -90,7 +90,7 @@ class Game:
     def __init__(self, answer: str, n: int) -> None:
         if n not in (3, 4):
             raise ValueError("solve attempt must be 3 or 4")
-        self.answer = answer
+        self.answer = answer.lower()
         self.n = n
         self.universe = sorted(set(load_answers()) | {answer})
         self.played: list[tuple[str, tuple[int, ...]]] = []
@@ -131,6 +131,7 @@ def sequence(answer: str, n: int) -> list[tuple[str, tuple[int, ...]]]:
     """`n` guesses ending with `answer`. Every guess before the last is consistent with
     the answer's real feedback, so the colours printed here are the colours NYT will show."""
     game = Game(answer, n)
+    answer = game.answer
     out = []
     while True:
         guess = game.suggestion()
@@ -152,7 +153,7 @@ if __name__ == "__main__":
     import sys
 
     sys.stdout.reconfigure(encoding="utf-8")  # Windows console defaults to cp1252, no emoji
-    word = sys.argv[1] if len(sys.argv) > 1 else "crane"
+    word = (sys.argv[1] if len(sys.argv) > 1 else "crane").lower()
     attempts = int(sys.argv[2]) if len(sys.argv) > 2 else 4
     consonant, vowel = hints(word)
     print(f"hints: consonant {consonant} · vowel {vowel}")

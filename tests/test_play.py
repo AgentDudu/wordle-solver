@@ -86,6 +86,17 @@ class InputHandling(unittest.TestCase):
     def test_an_unusable_answer_is_rejected(self):
         self.assertEqual(run(["4", "ranged"], [])[0], 2)
 
+    def test_an_uppercase_answer_argument_is_accepted(self):
+        code, out = run(["4", "RANGE"], [""] * 6)
+        self.assertEqual(code, 0)
+        self.assertIn("answer  RANGE", out)
+        self.assertIn("solved in 4", out)
+
+    def test_typed_guesses_are_case_insensitive(self):
+        code, out = run(["4", "range"], ["RaNgE"])
+        self.assertEqual(code, 0)
+        self.assertIn("solved in 1", out)
+
 
 if __name__ == "__main__":
     unittest.main()
