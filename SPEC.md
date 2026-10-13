@@ -31,13 +31,20 @@ the design.
 ## 3. Data
 
 ### 3.1 Answer
-1. In-memory / on-disk cache for the date (`cache.json`).
-2. `GET https://www.nytimes.com/svc/wordle/v2/YYYY-MM-DD.json` → `.solution`.
-   Verified 2026-10-13: returns `{"id":2024,"solution":"quail","print_date":"2025-06-15",
-   "days_since_launch":1457,"editor":"Tracy Bennett"}` with HTTP 200 **with and without** a
-   `User-Agent` header. A browser `User-Agent` is still sent — one line of insurance against
-   future bot protection, not a current requirement. One request per day.
-3. Manual override command `/wordle setanswer <word>` (owner-only, see §6).
+One JSON file, `cache.json` (`{"YYYY-MM-DD": "answer"}`), is the whole store:
+
+1. Read: return the stored entry for the date if present.
+2. Otherwise `GET https://www.nytimes.com/svc/wordle/v2/YYYY-MM-DD.json` → `.solution`, then write
+   it to the store. Verified 2026-10-13: returns
+   `{"id":2024,"solution":"quail","print_date":"2025-06-15","days_since_launch":1457,"editor":"Tracy Bennett"}`
+   with HTTP 200 **with and without** a `User-Agent` header. A browser `User-Agent` is still sent —
+   one line of insurance against future bot protection, not a current requirement. One request per day.
+3. `/wordle setanswer <word>` overwrites the entry for the date. Because the store is read first,
+   an override beats the endpoint forever, which is the whole point of the override.
+
+Anything reaching the store is validated as exactly five a–z letters, whether it came from the
+endpoint or from a user. A corrupt or missing store is not an error — it falls through to the
+endpoint.
 
 Date is resolved in `America/New_York` — NYT rolls the puzzle at midnight ET, not UTC.
 
@@ -112,11 +119,10 @@ second in pure Python) and more humanlike — humans guess from words they think
 The hint filter applies to guess 1 only; candidate tracking spans the whole universe, because a
 later guess may legitimately sit outside the hint filter.
 
-Sequences are cached per `(date, N)` next to the answer, so repeat calls are instant.
-
-The guess-1 ranking depends only on the hint pair, not on the answer, so it is memoised per
+Sequences are not cached: the guess-1 ranking depends only on the hint pair, not on the answer, so it is memoised per
 `(consonant, vowel)` — ~126 rankings instead of one per answer. Without it the full replay costs
-~15 minutes; with it, ~100 seconds.
+~15 minutes; with it, ~100 seconds. A single sequence after warm-up takes ~0.1 s, so sequences
+themselves are not cached.
 
 ## 5. Output
 
@@ -189,9 +195,9 @@ phase until the current phase's gate passes.
 |---|---|---|---|
 | **P0 — scaffold** | `feature/repo-scaffold` | Package layout, `requirements.txt`, `data/answers.txt`, `.gitignore`, `.gitattributes`, `.env.example`, `tests/test_words.py`. | `python -m unittest discover -s tests` passes offline; no solver code yet. |
 | **P1 — solver core** | `feature/solver-core` | `solver.py`: `colorize`, `score`, `hints`, `sequence`, `render`. `tests/test_solver.py` replay + `colorize` cases. | Sampled replay passes for N=3 and N=4; `WORDLE_REPLAY_ALL=1` sweep passes. Runs offline. |
-| **P2 — data layer** | `feature/nytimes-answer` | `nytimes.py`: answer fetch with browser UA, `cache.json`, `America/New_York` date, local hint derivation, sequence cache, manual override store. | Offline test against a fixture response; expired/missing-cache path returns the override; no network in CI. |
+| **P2 — data layer** | `feature/nytimes-answer` | `nytimes.py`: answer fetch with browser UA, `cache.json` store, `America/New_York` date, validation, manual override. | Offline tests against a fixture response: one fetch then store hit, override beats the endpoint, bad input rejected, corrupt store falls through. No network in the test run. |
 | **P3 — Discord** | `feature/discord-commands` | `bot.py`: `/wordle solve`, `/wordle answer`, `/wordle setanswer`, embed renderer. | Bot runs locally against a real server; all three commands render; `setanswer` rejected for non-owners. |
-| **P4 — hardening** | `feature/error-handling` | NYT failure → cache → override chain surfaced in the embed, 5-letter input validation, `README.md` setup + run instructions. | Simulated endpoint failure still produces a sequence via override. |
+| **P4 — hardening** | `feature/error-handling` | Endpoint failure surfaced in the embed with the store/override path explained, `README.md` setup + run instructions. | Simulated endpoint failure still produces a sequence via the store, and explains itself when the store is empty too. |
 
 Deliberate ordering: the solver is built and proven before any network or Discord code exists, so
 the guarantee in §4 is never blocked on an external dependency.
