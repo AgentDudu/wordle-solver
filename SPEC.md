@@ -175,16 +175,17 @@ tests/
     test_solver.py  # replay, sampled by default
     test_nytimes.py # store, endpoint fixture, ET rollover
     test_play.py    # scripted-stdin sessions
-requirements.txt    # tzdata, Windows only
+requirements.txt    # no third-party dependencies
 .gitattributes      # * text=auto eol=lf
 ```
 
-No `.env`, no token. Run with `python -m wordle.play`.
+No `.env`, no token, no installed packages. Run with `python -m wordle.play`.
 
-`zoneinfo` needs a tz database for `America/New_York`. Linux and macOS ship one; Windows does not,
-so a Windows checkout without `tzdata` dies at import with `ZoneInfoNotFoundError`. The date is
-pinned to ET because that is where NYT rolls the puzzle, and the answer is cached per date rather
-than re-fetched, so the cost of keeping that pin is one dependency on one platform.
+**The puzzle date is the machine's local date.** NYT resets at local midnight for each player, and
+the endpoint answers for any date requested: `2026-10-14.json` returned `psych` with
+`days_since_launch: 1943` while New York was still on the 13th. Pinning the date to Eastern was
+wrong for every player east of UTC−4 — a UTC+8 machine got yesterday's puzzle all day. The
+consequence is that `zoneinfo` and the Windows `tzdata` dependency leave the design entirely.
 
 ## 8. Test
 
@@ -232,7 +233,7 @@ removal and the CLI cannot each build on their own. Three commits, one PR:
 | Commit | Deliverable | Gate |
 |---|---|---|
 | `docs:` | specification revised to the CLI loop | — |
-| `chore:` | delete `bot.py`, `tests/test_bot.py`, `.env.example`, `discord.py`, `tzdata` stays for the ET date | suite passes with no Discord import anywhere |
+| `chore:` | delete `bot.py`, `tests/test_bot.py`, `.env.example`, `discord.py` | suite passes with no Discord import anywhere |
 | `feat:` | `Game` in `solver.py`, `sequence()` as the accept-everything wrapper, `play.py`, `tests/test_play.py`, `README.md` | existing replay green **unchanged** (sampled and full sweep); scripted-stdin tests cover accept, override, bad input, EOF |
 
 ## 10. Git workflow

@@ -6,20 +6,22 @@
 import json
 import re
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 _URL = "https://www.nytimes.com/svc/wordle/v2/{iso}.json"
 _USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 _STORE_PATH = Path(__file__).resolve().parent.parent / "cache.json"
-_EASTERN = ZoneInfo("America/New_York")
 
 
 def today(now: datetime | None = None) -> date:
-    """Puzzle date. NYT rolls at midnight Eastern, not UTC."""
-    now = now or datetime.now(timezone.utc)
-    return now.astimezone(_EASTERN).date()
+    """Puzzle date: the player's own local date.
+
+    NYT resets at local midnight for each player, and the endpoint answers for any date you ask
+    it for — `2026-10-14.json` served `psych` with `days_since_launch: 1943` while New York was
+    still on the 13th. Pinning this to Eastern handed UTC+8 players yesterday's puzzle.
+    """
+    return (now or datetime.now()).astimezone().date()
 
 
 def get_answer(day: date, store_path: Path = _STORE_PATH) -> str:

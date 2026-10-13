@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None, read=input) -> int:
     game = Game(answer, n)
     consonant, vowel = hints(answer)
     print(f"Wordle · {day.isoformat() if day else 'answer given on the command line'} · solve in {n}")
-    print(f"consonant {consonant} · vowel {vowel}")
+    print(f"consonant {consonant} · vowel {vowel or 'none'}")
 
     while True:
         attempt = len(game.played) + 1

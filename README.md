@@ -36,10 +36,10 @@ Python 3.12+.
 ```
 python -m venv .venv
 source .venv/Activate.ps1        # Windows PowerShell
-pip install -r requirements.txt  # tzdata, Windows only
 ```
 
-Nothing else to configure. No token, no account, no server.
+Nothing to install — the fetch is `urllib` and the puzzle date comes from your own clock, so
+there are no third-party packages. No token, no account, no server.
 
 ## Run
 
@@ -76,8 +76,11 @@ line.
   break the guarantee: today's answer is always added to the universe before guessing.
 - **One request per day.** The answer is fetched from the NYT endpoint and cached in `cache.json`,
   so a day is fetched at most once. If the endpoint is down, pass the answer on the command line.
-- **The date is pinned to New York time**, because that is when NYT rolls the puzzle. On Windows
-  that needs the `tzdata` package; Linux and macOS already ship a tz database.
+- **The puzzle date is your machine's local date.** NYT resets at local midnight for each
+  player, and the endpoint answers for any date you ask for: `2026-10-14.json` returned `psych`
+  with `days_since_launch: 1943` while New York was still on the 13th. Pinning the date to
+  Eastern handed UTC+8 players yesterday's puzzle. Set your clock right, or pass the answer
+  explicitly.
 - **Emoji output** needs a UTF-8 console. `python -m wordle.play` reconfigures stdout itself; if
   you import the modules from your own script, you may not.
 - Scraping the NYT answer is against the spirit of the game and arguably their terms. Personal
