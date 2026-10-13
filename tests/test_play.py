@@ -26,6 +26,7 @@ class AcceptingSuggestions(unittest.TestCase):
         for answer in ("crane", "range", "spate", "crypt"):
             for n in (3, 4):
                 code, out = run([str(n), answer], [""] * 6)
+                self.assertIn(f"answer  {answer.upper()}", out)
                 self.assertEqual(
                     suggestions(out), [w.upper() for w, _ in solver.sequence(answer, n)]
                 )
