@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None, read=input) -> int:
         if argv:
             n = int(argv[0])
         if len(argv) > 1:
-            answer = argv[1]
+            answer = argv[1].lower()
         if len(argv) > 2 or n not in (3, 4) or (answer and not re.fullmatch(r"[a-z]{5}", answer)):
             raise ValueError
     except ValueError:

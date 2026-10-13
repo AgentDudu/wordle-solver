@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from wordle.solver import colorize, hints, load_answers, sequence
+from wordle.solver import Game, colorize, hints, load_answers, sequence
 
 # Real NYT answers that data/answers.txt does not contain; see SPEC.md 3.3.
 OUT_OF_LIST = ["yodel", "aspic"]
@@ -47,6 +47,10 @@ class Sequence(unittest.TestCase):
         for bad in (0, 1, 2, 5, 6):
             with self.assertRaises(ValueError):
                 sequence("crane", bad)
+
+    def test_the_answer_is_normalised_to_lowercase(self):
+        self.assertEqual(Game("RANGE", 4).answer, "range")
+        self.assertEqual(sequence("RANGE", 4)[-1][0], "range")
 
     def _check(self, answer):
         for attempts in (3, 4):
