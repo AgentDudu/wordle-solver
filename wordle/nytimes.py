@@ -1,7 +1,6 @@
-"""Today's Wordle answer: NYT endpoint, on-disk store, manual override.
+"""Today's Wordle answer: NYT endpoint plus an on-disk cache, one entry per day.
 
-One file, `cache.json`, is the store. The endpoint fills it, `set_answer` overwrites an entry in
-it, and reads consult it first — so a manual override survives every later fetch.
+`cache.json` holds the fetched answers. Reads consult it first, so a day is fetched at most once.
 """
 
 import json
@@ -34,14 +33,6 @@ def get_answer(day: date, store_path: Path = _STORE_PATH) -> str:
     return answer
 
 
-def set_answer(answer: str, day: date | None = None, store_path: Path = _STORE_PATH) -> str:
-    answer = _validate(answer, source="override")
-    store = _read(store_path)
-    store[(day or today()).isoformat()] = answer
-    _write(store_path, store)
-    return answer
-
-
 def _fetch(day: date) -> str:
     request = urllib.request.Request(_URL.format(iso=day.isoformat()), headers={"User-Agent": _USER_AGENT})
     with urllib.request.urlopen(request, timeout=10) as response:
@@ -64,3 +55,12 @@ def _read(store_path: Path) -> dict[str, str]:
 
 def _write(store_path: Path, store: dict[str, str]) -> None:
     store_path.write_text(json.dumps(store, indent=1, sort_keys=True), encoding="utf-8")
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.stdout.reconfigure(encoding="utf-8")
+    day = today()
+    cached = _read(_STORE_PATH).get(day.isoformat())
+    print(f"{day.isoformat()}  {cached or get_answer(day)}  ({'cache' if cached else 'NYT endpoint'})")

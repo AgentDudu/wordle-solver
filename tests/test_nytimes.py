@@ -45,15 +45,10 @@ class Store(unittest.TestCase):
             self.assertEqual(nytimes.get_answer(self.day, self.path), "quail")
         self.assertEqual(fetch.call_count, 1)
 
-    def test_override_survives_later_fetches(self):
-        nytimes.set_answer("yodel", self.day, self.path)
+    def test_a_cached_day_is_served_without_fetching(self):
+        self.path.write_text('{"2025-06-15": "yodel"}', encoding="utf-8")
         with patch.object(nytimes, "_fetch", side_effect=AssertionError("must not fetch")):
             self.assertEqual(nytimes.get_answer(self.day, self.path), "yodel")
-
-    def test_override_rejects_bad_words(self):
-        for bad in ("yodels", "yode", "y0del", "yodel ", ""):
-            with self.assertRaises(ValueError):
-                nytimes.set_answer(bad, self.day, self.path)
 
     def test_corrupt_store_falls_back_to_the_endpoint(self):
         self.path.write_text("not json", encoding="utf-8")
