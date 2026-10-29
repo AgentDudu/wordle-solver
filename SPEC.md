@@ -166,7 +166,9 @@ Rules:
 - **Enter on an empty line accepts the suggestion.** Typing a word overrides it.
 - The player's word is validated as five a–z letters; anything else is rejected with a one-line
   reason and the prompt repeats, without consuming an attempt. A word already eliminated by the
-  colours so far is accepted — it is the player's move — with a note saying so.
+  colours so far is accepted — it is the player's move — with a note saying so. Absence from
+  `data/answers.txt` is not elimination: a legal guess the list does not contain (`adieu`,
+  `slane`) is accepted silently and still narrows the candidate set.
 - **The candidate set follows what was actually played**, not what was suggested. A divergent
   guess re-derives the next suggestion.
 - The colours are computed by the tool from the answer, so they cannot be mistyped.
