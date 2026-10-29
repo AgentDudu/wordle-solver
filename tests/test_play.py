@@ -52,6 +52,27 @@ class OverridingASuggestion(unittest.TestCase):
         self.assertEqual(solver.colorize("crane", "range"), (0, 1, 1, 1, 2))
         self.assertNotEqual(colors, (2, 2, 2, 2, 2))
 
+    def test_a_guess_off_the_answer_list_is_adapted_to_without_a_note(self):
+        # `adieu` is a legal Wordle guess that data/answers.txt does not contain. The candidate
+        # set must still narrow by its colours, and the word must not be called eliminated.
+        _, out = run(["4", "range"], ["adieu", "", "", ""])
+        self.assertNotIn("already eliminated", out)
+        self.assertIn("🟨⬛⬛🟨⬛", out)
+        self.assertEqual(suggestions(out)[-1], "RANGE")
+        for word in (w.lower() for w in suggestions(out)[1:]):
+            self.assertEqual(solver.colorize("adieu", word), solver.colorize("adieu", "range"))
+
+    def test_overriding_the_early_suggestions_still_narrows_to_the_answer(self):
+        # Every suggestion must fit the colours drawn by the guesses before it, including guesses
+        # the solver never suggested. A suggestion at index i is shown on attempt i+1, so it is
+        # only bound by the guesses of attempts 1..i.
+        typed = ["adieu", "bingo"]
+        _, out = run(["4", "range"], typed + ["", ""])
+        self.assertEqual(suggestions(out)[-1], "RANGE")
+        for attempt, word in enumerate(typed, 1):
+            for later in (w.lower() for w in suggestions(out)[attempt:]):
+                self.assertEqual(solver.colorize(word, later), solver.colorize(word, "range"))
+
     def test_an_eliminated_guess_is_accepted_with_a_note(self):
         _, out = run(["4", "range"], ["crane", "slate", "", ""])
         self.assertIn("already eliminated", out)

@@ -58,13 +58,15 @@ def main(argv: list[str] | None = None, read=input) -> int:
             print("   five letters a-z, or press Enter to take the suggestion")
             continue
 
-        live = entry in game.survivors
         # Only the answer fits the colours, so the suggestion is a deliberate stall rather than a
         # candidate — the one documented exception to the consistency rule.
         stall = guess != answer and game.survivors == [answer]
+        # A legal guess outside the bundled answer list was never a survivor, so absence from
+        # `survivors` alone is not evidence the colours ruled it out: `adieu`, `slane`, `roate`.
+        eliminated = entry in game.universe and entry not in game.survivors
         colors = game.play(entry)
         print("              " + "".join(FEEDBACK[c] for c in colors))
-        if typed and not live:
+        if typed and eliminated:
             print("   note: that word was already eliminated by the colours above")
         elif stall:
             print("   note: only the answer fits the colours, so this guess is a stall")
