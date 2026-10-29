@@ -57,7 +57,8 @@ At the prompt press **Enter** for 4, or type `3`. Any other answer repeats the q
 In the loop: press **Enter** to take the suggestion, or type the five-letter word you played
 instead. The candidate set follows what you actually played, so overriding a suggestion changes
 the next one. A word that the colours already ruled out is still accepted — it is your move — with
-a note saying so.
+a note saying so. A legal guess the bundled list does not contain (`adieu`, `slane`) is not that
+word: it is accepted without comment and narrows the set like any other.
 
 ## How it decides
 
@@ -93,13 +94,15 @@ line.
 ## Tests
 
 ```
-python -m unittest discover -s tests        # ~3 s, offline
-WORDLE_REPLAY_ALL=1 python -m unittest discover -s tests   # ~90 s
+python -m unittest discover -s tests                              # 38 tests, ~4 s, offline
+WORDLE_REPLAY_ALL=1 python -m unittest discover -s tests          # ~80 s
 ```
 
 The replay sweep plays all 2,315 answers for both attempt counts and asserts the guarantee: the
 last guess is the answer, no guess repeats, and no guess is ever eliminated by the feedback it
-itself drew. That is the same code path the CLI walks when you accept every suggestion.
+itself drew. That is the same code path the CLI walks when you accept every suggestion, and the CLI
+tests assert it — including sessions where the player overrides the early suggestions with words
+the solver never suggested.
 
 ## Not included
 
