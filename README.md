@@ -63,7 +63,9 @@ word: it is accepted without comment and narrows the set like any other.
 ## How it decides
 
 - **Guess 1** — the highest-scoring word from the official answer list that contains both letters
-  NYT hints for.
+  the NYT hint buttons would give. Those two letters are computed from the answer — the most
+  frequent consonant and vowel in it, by English letter frequency — so the Wordle Review page is
+  never scraped. The 13 answers with no vowel letter (`crypt`, `gypsy`, …) print `vowel none`.
 - **Guesses 2..N-1** — the guess that best splits the words still consistent with the feedback so
   far, restricted to words that are themselves still possible answers. That constraint is what
   makes the sequence look like competent play rather than a machine emptying a dictionary.
@@ -103,6 +105,16 @@ last guess is the answer, no guess repeats, and no guess is ever eliminated by t
 itself drew. That is the same code path the CLI walks when you accept every suggestion, and the CLI
 tests assert it — including sessions where the player overrides the early suggestions with words
 the solver never suggested.
+
+## Releases
+
+`main` holds tagged releases and `develop` is where work lands; `SPEC.md` §10 is the whole flow.
+Tags are annotated and there are no GitHub Release pages, so git is the changelog:
+
+```
+git tag -n99 v0.1.5                 # what a release was for
+git log --oneline v0.1.4..v0.1.5    # what went into it
+```
 
 ## Not included
 
