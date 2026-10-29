@@ -138,7 +138,8 @@ themselves are not cached.
 A terminal session:
 
 ```
-$ python -m wordle.play 4
+$ python -m wordle.play
+solve in 3 or 4 [4] > 4
 Wordle · 2026-02-12 · solve in 4
 answer  RANGE
 consonant N · vowel E
@@ -161,6 +162,9 @@ solved in 4
 
 Rules:
 
+- **The attempt count is asked for, not assumed**, when it was not given as an argument: Enter or
+  EOF takes 4, an answer outside 3 and 4 repeats the question without consuming an attempt. Given
+  as an argument it is never asked for.
 - **The answer is printed at the top**, before the hints. This is a personal aid, not a spoiler
   guard; the same word is printed by `python -m wordle.nytimes`.
 - **Enter on an empty line accepts the suggestion.** Typing a word overrides it.
@@ -184,7 +188,9 @@ python -m wordle.play [attempts] [answer]
 python -m wordle.nytimes
 ```
 
-`attempts` is 3 or 4, default 4; anything else prints the usage line and exits 2. `answer` overrides
+`attempts` is 3 or 4. Omit it and the session opens by asking `solve in 3 or 4 [4] > `: Enter or
+EOF takes 4, anything else repeats the question. Passed as an argument and outside 3 and 4, it
+prints the usage line and exits 2. `answer` overrides
 the puzzle answer for this run only, which is also the escape hatch when the NYT endpoint is
 unreachable — the same failure path prints that hint and exits 1.
 

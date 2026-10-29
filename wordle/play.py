@@ -13,19 +13,39 @@ from .solver import FEEDBACK, Game, hints
 _USAGE = "usage: python -m wordle.play [3|4] [answer]"
 
 
+def _ask_attempts(read) -> int:
+    """Attempt count, asked only when it was not given as an argument. Enter or EOF keeps 4."""
+    while True:
+        try:
+            typed = read("solve in 3 or 4 [4] > ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return 4
+        if not typed:
+            return 4
+        if typed in ("3", "4"):
+            return int(typed)
+        print("   3 or 4, or press Enter for 4")
+
+
 def main(argv: list[str] | None = None, read=input) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    n, answer = 4, None
+    n, answer = None, None
     try:
         if argv:
             n = int(argv[0])
         if len(argv) > 1:
             answer = argv[1].lower()
-        if len(argv) > 2 or n not in (3, 4) or (answer and not re.fullmatch(r"[a-z]{5}", answer)):
+        if (
+            len(argv) > 2
+            or (n is not None and n not in (3, 4))
+            or (answer and not re.fullmatch(r"[a-z]{5}", answer))
+        ):
             raise ValueError
     except ValueError:
         print(_USAGE)
         return 2
+    if n is None:
+        n = _ask_attempts(read)
 
     day = None
     if answer is None:
