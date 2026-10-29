@@ -4,6 +4,8 @@ import contextlib
 import io
 import re
 import unittest
+from datetime import date
+from unittest.mock import patch
 
 from wordle import play, solver
 
@@ -19,6 +21,17 @@ def run(argv, words):
 
 def suggestions(transcript):
     return [w for _, w in re.findall(r"^(\d)\. suggestion  (\w+)", transcript, re.M)]
+
+
+def todays_puzzle(answer):
+    """Serve a fixed answer for today's date, so a run with no answer argument stays offline.
+
+    The `read` stub below swallows the prompt text, so these tests assert the session header
+    (`solve in N`) rather than the question itself.
+    """
+    return patch.multiple(
+        play.nytimes, today=lambda: date(2026, 10, 13), get_answer=lambda day: answer
+    )
 
 
 class AcceptingSuggestions(unittest.TestCase):
@@ -82,6 +95,48 @@ class OverridingASuggestion(unittest.TestCase):
         _, out = run(["4", "range"], ["", "", "", ""])
         self.assertIn("this guess is a stall", out)
         self.assertNotIn("already eliminated", out)
+
+
+class AttemptCountPrompt(unittest.TestCase):
+    def test_it_asks_how_many_attempts_when_none_was_given(self):
+        with todays_puzzle("range"):
+            code, out = run([], ["3", "", "", ""])
+        self.assertEqual(code, 0)
+        self.assertIn("solve in 3", out)
+        self.assertIn("solved in 3", out)
+        self.assertEqual(len(suggestions(out)), 3)
+
+    def test_enter_at_the_prompt_keeps_the_default_of_four(self):
+        with todays_puzzle("range"):
+            code, out = run([], ["", "", "", "", ""])
+        self.assertEqual(code, 0)
+        self.assertIn("solved in 4", out)
+
+    def test_an_answer_outside_three_or_four_repeats_without_consuming_a_guess(self):
+        with todays_puzzle("range"):
+            _, out = run([], ["2", "five", "4", "", "", "", ""])
+        self.assertEqual(out.count("3 or 4, or press Enter for 4"), 2)
+        self.assertIn("solve in 4", out)
+        self.assertEqual(out.count("1. suggestion"), 1)
+
+    def test_end_of_input_at_the_prompt_takes_the_default(self):
+        def eof(prompt=""):
+            raise EOFError
+
+        out = io.StringIO()
+        with todays_puzzle("range"), contextlib.redirect_stdout(out):
+            code = play.main([], read=eof)
+        self.assertEqual(code, 1)
+        self.assertIn("solve in 4", out.getvalue())
+        self.assertIn("the answer was RANGE", out.getvalue())
+
+    def test_an_explicit_attempt_count_does_not_ask(self):
+        # Three guesses offered for a three-attempt puzzle: if the prompt appeared it would eat
+        # one of them and the run would stop short of the answer.
+        code, out = run(["3", "range"], ["", "", ""])
+        self.assertEqual(code, 0)
+        self.assertIn("solved in 3", out)
+        self.assertNotIn("press Enter", out)
 
 
 class InputHandling(unittest.TestCase):
