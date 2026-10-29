@@ -7,6 +7,7 @@ guess.
 
 ```
 $ python -m wordle.play
+solve in 3 or 4 [4] > 4
 Wordle · 2026-10-13 · solve in 4
 answer  WIDER
 consonant r · vowel e
@@ -45,11 +46,13 @@ there are no third-party packages. No token, no account, no server.
 ## Run
 
 ```
-python -m wordle.play              # today's puzzle, solve in 4
-python -m wordle.play 3            # solve in 3
+python -m wordle.play              # today's puzzle; asks how many attempts
+python -m wordle.play 3            # solve in 3, without asking
 python -m wordle.play 4 yodel      # use `yodel` as the answer instead of fetching
 python -m wordle.nytimes           # just today's answer
 ```
+
+At the prompt press **Enter** for 4, or type `3`. Any other answer repeats the question.
 
 In the loop: press **Enter** to take the suggestion, or type the five-letter word you played
 instead. The candidate set follows what you actually played, so overriding a suggestion changes
