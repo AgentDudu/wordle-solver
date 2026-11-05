@@ -1,20 +1,17 @@
-"""Interactive CLI: suggest a guess, take the word the player actually played.
+"""Interactive CLI loop: suggest a guess, take the word the player actually played.
 
-The colours are computed here rather than typed in, because the answer is already known, so a
-mis-entered pattern cannot poison the candidate set.
+`main` is called by `main.py`; colours are computed here rather than typed in, because the answer
+is already known, so a mis-entered pattern cannot poison the candidate set.
 """
 
 import re
-import sys
 
 from . import nytimes
 from .solver import FEEDBACK, Game, hints
 
-_USAGE = "usage: python -m wordle.play [3|4] [answer]"
-
 
 def _ask_attempts(read) -> int:
-    """Attempt count, asked only when it was not given as an argument. Enter or EOF keeps 4."""
+    """Attempt count, asked only when it was not given as a flag. Enter or EOF keeps 4."""
     while True:
         try:
             typed = read("solve in 3 or 4 [4] > ").strip()
@@ -27,26 +24,9 @@ def _ask_attempts(read) -> int:
         print("   3 or 4, or press Enter for 4")
 
 
-def main(argv: list[str] | None = None, read=input) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    n, answer = None, None
-    try:
-        if argv:
-            n = int(argv[0])
-        if len(argv) > 1:
-            answer = argv[1].lower()
-        if (
-            len(argv) > 2
-            or (n is not None and n not in (3, 4))
-            or (answer and not re.fullmatch(r"[a-z]{5}", answer))
-        ):
-            raise ValueError
-    except ValueError:
-        print(_USAGE)
-        return 2
-    if n is None:
-        n = _ask_attempts(read)
-
+def main(attempts: int | None = None, answer: str | None = None, read=input) -> int:
+    """One session. `attempts` and `answer` are already validated by the caller."""
+    n = attempts if attempts is not None else _ask_attempts(read)
     day = None
     if answer is None:
         try:
@@ -54,9 +34,10 @@ def main(argv: list[str] | None = None, read=input) -> int:
             answer = nytimes.get_answer(day)
         except Exception as exc:  # URLError, HTTPError, bad JSON, unusable solution
             print(f"could not get today's answer: {exc}")
-            print(f"pass it directly: python -m wordle.play {n} <answer>")
+            print("pass it directly: python main.py --answer <answer>")
             return 1
 
+    answer = answer.lower()  # the comparisons below are against lowercase candidates
     game = Game(answer, n)
     consonant, vowel = hints(answer)
     print(f"Wordle · {day.isoformat() if day else 'answer given on the command line'} · solve in {n}")
@@ -93,8 +74,3 @@ def main(argv: list[str] | None = None, read=input) -> int:
         if game.solved:
             print(f"\nsolved in {attempt}")
             return 0
-
-
-if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8")  # Windows console defaults to cp1252, no emoji
-    raise SystemExit(main())

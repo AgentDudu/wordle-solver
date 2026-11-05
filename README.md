@@ -6,7 +6,7 @@ word you actually played, it prints the colours that word really drew, and it su
 guess.
 
 ```
-$ python -m wordle.play
+$ python main.py
 solve in 3 or 4 [4] > 4
 Wordle · 2026-10-13 · solve in 4
 answer  WIDER
@@ -46,13 +46,16 @@ there are no third-party packages. No token, no account, no server.
 ## Run
 
 ```
-python -m wordle.play              # today's puzzle; asks how many attempts
-python -m wordle.play 3            # solve in 3, without asking
-python -m wordle.play 4 yodel      # use `yodel` as the answer instead of fetching
-python -m wordle.nytimes           # just today's answer
+python main.py                # today's puzzle; asks how many attempts
+python main.py -n 3           # solve in 3, without asking
+python main.py -a yodel       # use `yodel` as the answer instead of fetching
+python main.py answer         # just today's answer
+python main.py --help
 ```
 
-At the prompt press **Enter** for 4, or type `3`. Any other answer repeats the question.
+At the prompt press **Enter** for 4, or type `3`. Any other answer repeats the question. `-n` and
+`--attempts`, `-a` and `--answer` are the same thing written long; `-a` wants five a–z letters and
+accepts any case.
 
 In the loop: press **Enter** to take the suggestion, or type the five-letter word you played
 instead. The candidate set follows what you actually played, so overriding a suggestion changes
@@ -88,7 +91,7 @@ line.
   with `days_since_launch: 1943` while New York was still on the 13th. Pinning the date to
   Eastern handed UTC+8 players yesterday's puzzle. Set your clock right, or pass the answer
   explicitly.
-- **Emoji output** needs a UTF-8 console. `python -m wordle.play` reconfigures stdout itself; if
+- **Emoji output** needs a UTF-8 console. `python main.py` reconfigures stdout itself; if
   you import the modules from your own script, you may not.
 - Scraping the NYT answer is against the spirit of the game and arguably their terms. Personal
   use, one request a day.
