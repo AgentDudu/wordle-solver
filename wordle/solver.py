@@ -20,7 +20,7 @@ def load_answers(path: Path = _ANSWERS_PATH) -> list[str]:
     return sorted(path.read_text(encoding="utf-8").split())
 
 
-def colorize(guess: str, answer: str) -> tuple[int, int, int, int, int]:
+def colorize(guess: str, answer: str) -> tuple[int, ...]:
     """Wordle feedback for `guess` against `answer`: greens first, then yellows
     against still-unmatched answer letters, so repeated letters score correctly."""
     colors = [GRAY] * 5
@@ -147,14 +147,3 @@ def render(seq: list[tuple[str, tuple[int, ...]]]) -> str:
     for i, (word, colors) in enumerate(seq, 1):
         lines.append(f"{i}. {word.upper()}  {''.join(FEEDBACK[c] for c in colors)}")
     return "\n".join(lines)
-
-
-if __name__ == "__main__":
-    import sys
-
-    sys.stdout.reconfigure(encoding="utf-8")  # Windows console defaults to cp1252, no emoji
-    word = (sys.argv[1] if len(sys.argv) > 1 else "crane").lower()
-    attempts = int(sys.argv[2]) if len(sys.argv) > 2 else 4
-    consonant, vowel = hints(word)
-    print(f"hints: consonant {consonant} · vowel {vowel}")
-    print(render(sequence(word, attempts)))
