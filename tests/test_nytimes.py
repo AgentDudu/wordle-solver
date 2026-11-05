@@ -57,6 +57,24 @@ class Store(unittest.TestCase):
             self.assertEqual(nytimes.get_answer(self.day, self.path), "quail")
 
 
+class Lookup(unittest.TestCase):
+    """`lookup` is what the `answer` subcommand prints, including where the answer came from."""
+
+    def setUp(self):
+        self.path = _store(self)
+        self.day = date(2025, 6, 15)
+
+    def test_a_stored_day_is_reported_as_the_cache(self):
+        self.path.write_text('{"2025-06-15": "yodel"}', encoding="utf-8")
+        with patch.object(nytimes, "_fetch", side_effect=AssertionError("must not fetch")):
+            self.assertEqual(nytimes.lookup(self.day, self.path), ("yodel", "cache"))
+
+    def test_a_fetched_day_is_reported_as_the_endpoint(self):
+        with patch.object(nytimes, "_fetch", return_value="quail"):
+            self.assertEqual(nytimes.lookup(self.day, self.path), ("quail", "NYT endpoint"))
+        self.assertEqual(nytimes.lookup(self.day, self.path), ("quail", "cache"))
+
+
 class PuzzleDate(unittest.TestCase):
     def test_the_puzzle_date_is_the_local_date(self):
         self.assertEqual(nytimes.today(), datetime.now().date())

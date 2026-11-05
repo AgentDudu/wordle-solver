@@ -44,8 +44,8 @@ One JSON file, `cache.json` (`{"YYYY-MM-DD": "answer"}`), is the whole store:
    `{"id":2024,"solution":"quail","print_date":"2025-06-15","days_since_launch":1457,"editor":"Tracy Bennett"}`
    with HTTP 200 **with and without** a `User-Agent` header. A browser `User-Agent` is still sent —
    one line of insurance against future bot protection, not a current requirement. One request per day.
-3. No persistent override. When the endpoint is unreachable, the answer is passed on the command
-   line (`python -m wordle.play 4 yodel`) and used for that run only.
+3. No persistent override. When the endpoint is unreachable, the answer is passed as a flag
+   (`python main.py --answer yodel`) and used for that run only.
 
 Anything reaching the store is validated as exactly five a–z letters, whether it came from the
 endpoint or from a user. A corrupt or missing store is not an error — it falls through to the
@@ -138,7 +138,7 @@ themselves are not cached.
 A terminal session:
 
 ```
-$ python -m wordle.play
+$ python main.py
 solve in 3 or 4 [4] > 4
 Wordle · 2026-02-12 · solve in 4
 answer  RANGE
@@ -162,11 +162,11 @@ solved in 4
 
 Rules:
 
-- **The attempt count is asked for, not assumed**, when it was not given as an argument: Enter or
-  EOF takes 4, an answer outside 3 and 4 repeats the question without consuming an attempt. Given
-  as an argument it is never asked for.
+- **The attempt count is asked for, not assumed**, when no count was given as a flag: Enter or EOF
+  takes 4, an answer outside 3 and 4 repeats the question without consuming an attempt. Given as
+  `-n`/`--attempts` it is never asked for.
 - **The answer is printed at the top**, before the hints. This is a personal aid, not a spoiler
-  guard; the same word is printed by `python -m wordle.nytimes`.
+  guard; the same word is printed by `python main.py answer`.
 - **Enter on an empty line accepts the suggestion.** Typing a word overrides it.
 - The player's word is validated as five a–z letters; anything else is rejected with a one-line
   reason and the prompt repeats, without consuming an attempt. A word already eliminated by the
@@ -183,41 +183,50 @@ Rules:
 
 ## 6. Usage
 
+One entry point: `main.py`. The modules under `wordle/` have no `__main__` block; they are the API
+that `main.py` calls.
+
 ```
-python -m wordle.play [attempts] [answer]
-python -m wordle.nytimes
+python main.py                                # today's puzzle, asks how many attempts
+python main.py -n 3                           # 3 attempts, no question asked
+python main.py -a yodel                       # yodel instead of fetching today's answer
+python main.py answer                         # date, answer, and cache-or-endpoint
+python main.py --help
 ```
 
-`attempts` is 3 or 4. Omit it and the session opens by asking `solve in 3 or 4 [4] > `: Enter or
-EOF takes 4, anything else repeats the question. Passed as an argument and outside 3 and 4, it
-prints the usage line and exits 2. `answer` overrides
-the puzzle answer for this run only, which is also the escape hatch when the NYT endpoint is
-unreachable — the same failure path prints that hint and exits 1.
+`-n`/`--attempts` is 3 or 4; outside that range argparse prints usage and exits 2. Omit it and the
+session opens by asking `solve in 3 or 4 [4] > `: Enter or EOF takes 4, anything else repeats the
+question. `-a`/`--answer` must be five a–z letters, is normalised to lowercase, and overrides the
+puzzle answer for this run only — which is also the escape hatch when the NYT endpoint is
+unreachable, the same failure path printing that hint and exiting 1. The old positional form
+(`main.py 4 yodel`) exits 2 rather than being misread.
 
-`python -m wordle.nytimes` prints the date, the answer, and whether it came from the cache or the
-endpoint.
+`python main.py answer` prints the date, the answer, and where it came from. With `-a` it prints
+the given word and makes no request at all.
 
 No token, no `.env`, no installed packages. One network request per day at most.
 
 ## 7. Layout
 
 ```
+main.py             # the only entry point: argparse, dispatch, the answer subcommand
 wordle/
     __init__.py
     nytimes.py      # answer fetch + cache store
     solver.py       # colorize, score, hints, Game, sequence, render
-    play.py         # CLI loop
+    play.py         # the session loop, called by main.py
 data/answers.txt
 tests/
     test_words.py   # answer-list integrity
     test_solver.py  # replay, sampled by default
-    test_nytimes.py # store, endpoint fixture, ET rollover
+    test_nytimes.py # store, endpoint fixture, rollover, lookup
+    test_main.py    # flags and the answer subcommand
     test_play.py    # scripted-stdin sessions
 requirements.txt    # no third-party dependencies
 .gitattributes      # * text=auto eol=lf
 ```
 
-No `.env`, no token, no installed packages. Run with `python -m wordle.play`.
+No `.env`, no token, no installed packages. Run with `python main.py`.
 
 **The puzzle date is the machine's local date.** NYT resets at local midnight for each player, and
 the endpoint answers for any date requested: `2026-10-14.json` returned `psych` with

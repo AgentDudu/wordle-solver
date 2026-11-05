@@ -35,6 +35,12 @@ def get_answer(day: date, store_path: Path = _STORE_PATH) -> str:
     return answer
 
 
+def lookup(day: date, store_path: Path = _STORE_PATH) -> tuple[str, str]:
+    """(answer, where it came from) for `day`: 'cache' or 'NYT endpoint'."""
+    stored = _read(store_path).get(day.isoformat())
+    return (stored or get_answer(day, store_path), "cache" if stored else "NYT endpoint")
+
+
 def _fetch(day: date) -> str:
     request = urllib.request.Request(_URL.format(iso=day.isoformat()), headers={"User-Agent": _USER_AGENT})
     with urllib.request.urlopen(request, timeout=10) as response:
@@ -57,12 +63,3 @@ def _read(store_path: Path) -> dict[str, str]:
 
 def _write(store_path: Path, store: dict[str, str]) -> None:
     store_path.write_text(json.dumps(store, indent=1, sort_keys=True), encoding="utf-8")
-
-
-if __name__ == "__main__":
-    import sys
-
-    sys.stdout.reconfigure(encoding="utf-8")
-    day = today()
-    cached = _read(_STORE_PATH).get(day.isoformat())
-    print(f"{day.isoformat()}  {cached or get_answer(day)}  ({'cache' if cached else 'NYT endpoint'})")
